@@ -12,6 +12,13 @@ Data Management: Price data is saved to an Excel file named with the current dat
 Usage
 Clone this repository to your local machine.
 
+Create and Manage Excel File
+    To store the scraped product prices, this script creates an Excel file with three columns: 'Grazie Price,' 'Amazon           Price,' and 'Noon Price.' You can easily manage this file's name, location, and column titles as per your preferences.
+File Location
+    Save this file in the same directory as your python script
+File Name
+    The file name is set in the script at Line 13, adjust accordingly so it matches.
+
 Install the required Python packages using the following command:
 Copy code into CMD:
     pip install requests
