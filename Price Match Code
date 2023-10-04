@@ -1,0 +1,112 @@
+import pandas as pd
+from bs4 import BeautifulSoup
+import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from datetime import datetime
+
+today_date = datetime.now().strftime('%Y-%m-%d')
+excel_title = f"{today_date} Price Match.xlsx"
+df = pd.read_excel('Price_Match.xlsx', sheet_name='Sheet1')
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 5)
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    "Accept-Encoding": "gzip, deflate",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "DNT": "1",
+    "Connection": "close",
+    "Upgrade-Insecure-Requests": "1"
+}
+
+#Amazon SKU URLs for price match
+AMZN_URL_List = [ 
+    'https://www.amazon.ae/Diameter-Control-Temperature-FS1620R-B5-Warranty/dp/B0168IUFKM/ref=sr_1_1?crid=3EIO2GHTNZN9I&keywords=FS1620R-B5&qid=1686894864&sprefix=fs1620r-b5%2Caps%2C546&sr=8-1', #3
+    'https://www.amazon.ae/Black-Decker-Covection-Technology-Af250G-B5/dp/B07YN9KLC9/ref=sr_1_1?crid=CCWTGFI73XK8&keywords=AF250G-B5&qid=1686894918&sprefix=fs1620r-b5%2Caps%2C195&sr=8-1&th=1',#4
+    'https://www.amazon.ae/DECKER-Radiator-Black-OR013FD-B5-Warranty/dp/B07QRB9XDD/ref=sr_1_1?crid=2HJKN8OY57XNV&keywords=OR013FD-B5&qid=1686894981&sprefix=af250g-b5%2Caps%2C174&sr=8-1',#5
+    'https://www.amazon.ae/DECKER-Radiator-Black-OR070D-B5-Warranty/dp/B07QQ7L6DG/ref=sr_1_1?crid=1ZU8W2P1XKYDV&keywords=OR070D-B5&qid=1686895027&sprefix=or070d-b5%2Caps%2C324&sr=8-1'
+]
+
+#Noon SKU URLs for price match
+NOON_URL_List = [ 
+	"https://www.noon.com/uae-en/pedestal-stand-fan-with-remote-60-w-fs1620r-b5-black/N16326750A/p/?o=bcc33c7cbc5f6c0a", #3
+	"https://www.noon.com/uae-en/air-fryer-with-0-8kg-anti-stick-with-rapid-air-convection-technology-suitable-for-2-4-people-2-5-l-1500-w-af250g-b5-black-gold/N30697140A/p/",
+	"https://www.noon.com/uae-en/oil-radiator-heater-with-fan-forced-and-3-heat-setting-13-fin-2500-w-or013fd-b5-black/N21719636A/p/",
+	"https://www.noon.com/uae-en/oil-radiator-heater-with-3-heat-setting-7-fin-1500-w-or070d-b5-or070d-b9-black/N21719633A/p/"
+    ]
+
+#Grazie SKU URLs for price match
+GRZE_URL_list = [ 
+	'https://thegrazie.com/products/16-inch-3-speed-pedestal-stand-fan-with-remote-control',
+	'https://thegrazie.com/products/2-5-liter-800g-1500w-manual-air-fryer-aerofry-with-rapid-air-covection-technology-black-gold',
+	'https://thegrazie.com/products/2500w-13-fin-oil-radiator-heater-with-fan-forced-black',
+	'https://thegrazie.com/products/1500w-7-fin-oil-radiator-heater-black'
+    ]
+
+#Noon Price Match
+for URL in NOON_URL_List:
+    try:
+        if url.strip():
+            noon_price = ""
+            driver.get(url)
+            price_element = wait.until(EC.visibility_of_element_located((By.CLASS_NAME, 'priceNow')))
+            vendor_element = driver.find_element(By.XPATH, '//div[@class="sc-b7d37348-2 fnbbpc"]')
+            vendor = vendor_element.text
+            price = price_element.text
+            price = price.replace('AED', '').replace('Inclusive of VAT', '').strip()
+            if vendor == "noon" or vendor == "BlueOceanGlobal-UAE":
+                noon_price = float(price)
+            else:
+                noon_price = str("out of stock")
+        else:
+            noon_price = str("out of stock")
+    except Exception as e:
+        noon_price = str("out of stock")
+
+    df.at[NOON_URL_List.index(URL), 'Noon Price'] = noon_price
+
+#Grazie Price Match
+for URL in GRZE_URL_list:
+    if URL.strip():
+        grazie_price = ""
+        page = requests.get(URL, headers=headers)
+        soup = BeautifulSoup(page.content, "html.parser")
+        price_element = soup.find('span', class_='product__price on-sale')
+        if price_element is not None:
+            price = price_element.get_text().replace('AED', '').strip()
+            grazie_price = float(price)
+        else:
+            grazie_price = str("out of stock")
+    else:
+        grazie_price = str("out of stock")
+
+    df.at[GRZE_URL_list.index(URL), 'Grazie Price'] = grazie_price
+
+#Amazon Price Match
+for URL in AMZN_URL_List:
+    if URL.strip():
+        amazon_price = float('nan')
+        page = requests.get(URL, headers=headers)
+        soup = BeautifulSoup(page.content, "html.parser")
+        price_element = soup.find('span', class_='a-price-whole')
+        decimal_element = soup.find('span', class_='a-price-fraction')
+        if price_element is not None and decimal_element is not None:
+            price_1 = price_element.get_text().strip()
+            decimal_1 = decimal_element.get_text().strip()
+            price_whole = price_1 + decimal_1
+            amazon_price = float(price_whole)
+        else:
+            amazon_price = str("out of stock")
+    else:
+        amazon_price = str("out of stock")
+
+    df.at[AMZN_URL_List.index(URL), 'Amazon Price'] = amazon_price
+
+#df.to_excel('Price_Match.xlsx', index=False)
+df.to_excel(excel_title, index=False)
+
+driver.quit()
